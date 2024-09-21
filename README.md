@@ -17,109 +17,262 @@
  * under the License.
  */
 
-package org.apache.druid.server.http;
+package org.apache.druid.server.extension.service;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.jaxrs.smile.SmileMediaTypes;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
-import com.google.common.net.HostAndPort;
 import com.google.inject.Inject;
-import com.sun.jersey.spi.container.ResourceFilters;
-import org.apache.druid.audit.AuditManager;
+import org.apache.druid.guice.ManageLifecycle;
 import org.apache.druid.guice.annotations.Json;
-import org.apache.druid.guice.annotations.Smile;
-import org.apache.druid.java.util.common.IAE;
-import org.apache.druid.java.util.common.RE;
-import org.apache.druid.java.util.common.logger.Logger;
+import org.apache.druid.java.util.common.StringUtils;
+import org.apache.druid.java.util.common.lifecycle.LifecycleStart;
+import org.apache.druid.java.util.common.lifecycle.LifecycleStop;
 import org.apache.druid.java.util.emitter.service.ServiceEmitter;
 import org.apache.druid.metadata.MetadataStorageTablesConfig;
 import org.apache.druid.metadata.SQLMetadataConnector;
-import org.apache.druid.query.lookup.LookupsState;
-import org.apache.druid.server.audit.AuditManagerConfig;
-import org.apache.druid.server.audit.AuditSerdeHelper;
-import org.apache.druid.server.extension.service.TestDbClass;
-import org.apache.druid.server.http.security.ConfigResourceFilter;
-import org.apache.druid.server.lookup.cache.LookupCoordinatorManager;
-import org.apache.druid.server.lookup.cache.LookupExtractorFactoryMapContainer;
-import org.apache.druid.server.security.AuthorizationUtils;
+import org.skife.jdbi.v2.Handle;
+import org.skife.jdbi.v2.IDBI;
 
-import javax.annotation.Nullable;
-import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-/**
- * Contains information about lookups exposed through the coordinator
- */
-@Path("/druid/coordinator/v1/test")
-@ResourceFilters(ConfigResourceFilter.class)
-public class TestResource1
+@ManageLifecycle
+public class TestDbClass //implements AuditManager
 {
+  private final IDBI dbi;
+  private final SQLMetadataConnector connector;
+  private final Supplier<MetadataStorageTablesConfig> dbTables;
+  private final ServiceEmitter emitter;
+  private final ObjectMapper jsonMapper;
+//  private final SQLAuditManagerConfig config;
+//  private final AuditSerdeHelper serdeHelper;
 
-  private TestDbClass ob;
+//  private final ResultSetMapper<AuditEntry> resultMapper;
 
   @Inject
-  public TestResource1(
-          TestDbClass ob1
-  ) {
-    this.ob = ob1;
-  }
-
-  @GET
-  @Path("/p1")
-  @Produces({MediaType.APPLICATION_JSON, SmileMediaTypes.APPLICATION_JACKSON_SMILE})
-  public Response getTiers(
-
+  public TestDbClass(
+      SQLMetadataConnector connector,
+      Supplier<MetadataStorageTablesConfig> dbTables,
+      ServiceEmitter emitter,
+      @Json ObjectMapper jsonMapper
   )
   {
-    return Response.ok().entity("Hello!!").build();
+    this.dbi = connector.getDBI();
+    this.connector = connector;
+    this.dbTables = dbTables;
+    this.emitter = emitter;
+    this.jsonMapper = jsonMapper;
+//    this.serdeHelper = serdeHelper;
+//    this.resultMapper = new AuditEntryMapper();
+
   }
 
-  @GET
-  @Path("/add")
-  @Produces({MediaType.APPLICATION_JSON, SmileMediaTypes.APPLICATION_JACKSON_SMILE})
-  public Response add(
-
-  )
+  @LifecycleStart
+  public void start()
   {
-    ob.addData();
-    return Response.ok().entity("Data added!!").build();
+//    c onnector.createAuditTable();
   }
 
-  @GET
-  @Path("/get")
-  @Produces({MediaType.APPLICATION_JSON, SmileMediaTypes.APPLICATION_JACKSON_SMILE})
-  public Response getAll(
-
-  )
+  @LifecycleStop
+  public void stop()
   {
-//    return ob.getAllData();
-    return Response.ok().entity(ob.getAllData()).build();
+    // Do nothing
   }
+
+  private String getAuditTable()
+  {
+    return "test_table";//dbTables.get().getAuditTable();
+  }
+
+//  @Override
+  public void addData()
+  {
+    dbi.withHandle(
+        handle -> {
+          doAudit("hello", handle);
+          return 0;
+        }
+    );
+  }
+
+//  private ServiceMetricEvent.Builder createMetricEventBuilder(AuditEntry entry)
+//  {
+//    ServiceMetricEvent.Builder builder = new ServiceMetricEvent.Builder()
+//        .setDimension("key", entry.getKey())
+//        .setDimension("type", entry.getType())
+//        .setDimension("author", entry.getAuditInfo().getAuthor())
+//        .setDimension("comment", entry.getAuditInfo().getComment())
+//        .setDimension("remote_address", entry.getAuditInfo().getIp())
+//        .setDimension("created_date", entry.getAuditTime().toString());
+//
+//    if (config.isIncludePayloadAsDimensionInMetric()) {
+//      builder.setDimension("payload", entry.getPayload().serialized());
+//    }
+//
+//    return builder;
+//  }
+
+//  @Override
+  public void doAudit(String data, Handle handle) throws IOException
+  {
+
+    handle.createStatement(
+        StringUtils.format(
+            "INSERT INTO %s (c1)"
+            + " VALUES (:audit_key)",
+            getAuditTable()
+        )
+    )
+          .bind("audit_key", "Hello")
+//          .bind("type", record.getType())
+//          .bind("author", record.getAuditInfo().getAuthor())
+//          .bind("comment", record.getAuditInfo().getComment())
+//          .bind("created_date", record.getAuditTime().toString())
+//          .bind("payload", jsonMapper.writeValueAsBytes(record))
+          .execute();
+  }
+
+  public List<Map<String, Object>> getAllData()
+  {
+    return dbi.withHandle(
+        (Handle handle) -> handle
+            .createQuery(
+                StringUtils.format(
+                    "SELECT c1 FROM %s",
+                    getAuditTable()
+                )
+            )
+            .list()
+    );
+  }
+//
+//  @Override
+//  public List<AuditEntry> fetchAuditHistory(final String key, final String type, Interval interval)
+//  {
+//    final Interval theInterval = createAuditHistoryIntervalIfNull(interval);
+//    return dbi.withHandle(
+//        (Handle handle) -> handle
+//            .createQuery(
+//                StringUtils.format(
+//                    "SELECT payload FROM %s WHERE audit_key = :audit_key and type = :type and "
+//                    + "created_date between :start_date and :end_date ORDER BY created_date",
+//                    getAuditTable()
+//                )
+//            )
+//            .bind("audit_key", key)
+//            .bind("type", type)
+//            .bind("start_date", theInterval.getStart().toString())
+//            .bind("end_date", theInterval.getEnd().toString())
+//            .map(resultMapper)
+//            .list()
+//    );
+//  }
+//
+//  private Interval createAuditHistoryIntervalIfNull(Interval interval)
+//  {
+//    if (interval == null) {
+//      DateTime now = DateTimes.nowUtc();
+//      return new Interval(now.minus(config.getAuditHistoryMillis()), now);
+//    } else {
+//      return interval;
+//    }
+//  }
+//
+//  private int getLimit(int limit) throws IllegalArgumentException
+//  {
+//    if (limit < 1) {
+//      throw new IllegalArgumentException("Limit must be greater than zero!");
+//    }
+//    return limit;
+//  }
+//
+//  @Override
+//  public List<AuditEntry> fetchAuditHistory(final String type, Interval interval)
+//  {
+//    final Interval theInterval = createAuditHistoryIntervalIfNull(interval);
+//    return dbi.withHandle(
+//        (Handle handle) -> handle
+//            .createQuery(
+//                StringUtils.format(
+//                    "SELECT payload FROM %s WHERE type = :type and created_date between :start_date and "
+//                    + ":end_date ORDER BY created_date",
+//                    getAuditTable()
+//                )
+//            )
+//            .bind("type", type)
+//            .bind("start_date", theInterval.getStart().toString())
+//            .bind("end_date", theInterval.getEnd().toString())
+//            .map(resultMapper)
+//            .list()
+//    );
+//  }
+//
+//  @Override
+//  public List<AuditEntry> fetchAuditHistory(final String key, final String type, int limit)
+//      throws IllegalArgumentException
+//  {
+//    return fetchAuditHistoryLastEntries(key, type, limit);
+//  }
+//
+//  @Override
+//  public List<AuditEntry> fetchAuditHistory(final String type, int limit)
+//      throws IllegalArgumentException
+//  {
+//    return fetchAuditHistoryLastEntries(null, type, limit);
+//  }
+//
+//  @Override
+//  public int removeAuditLogsOlderThan(final long timestamp)
+//  {
+//    DateTime dateTime = DateTimes.utc(timestamp);
+//    return dbi.withHandle(
+//        handle -> {
+//          Update sql = handle.createStatement(
+//              StringUtils.format(
+//                  "DELETE FROM %s WHERE created_date < :date_time",
+//                  getAuditTable()
+//              )
+//          );
+//          return sql.bind("date_time", dateTime.toString())
+//                    .execute();
+//        }
+//    );
+//  }
+//
+//  private List<AuditEntry> fetchAuditHistoryLastEntries(final String key, final String type, int limit)
+//      throws IllegalArgumentException
+//  {
+//    final int theLimit = getLimit(limit);
+//    String queryString = StringUtils.format("SELECT payload FROM %s WHERE type = :type", getAuditTable());
+//    if (key != null) {
+//      queryString += " and audit_key = :audit_key";
+//    }
+//    queryString += " ORDER BY created_date DESC";
+//    final String theQueryString = queryString;
+//
+//    return dbi.withHandle(
+//        (Handle handle) -> {
+//          Query<Map<String, Object>> query = handle.createQuery(theQueryString);
+//          if (key != null) {
+//            query.bind("audit_key", key);
+//          }
+//          return query
+//              .bind("type", type)
+//              .setMaxRows(theLimit)
+//              .map(resultMapper)
+//              .list();
+//        }
+//    );
+//  }
+//
+//  private class AuditEntryMapper implements ResultSetMapper<AuditEntry>
+//  {
+//    @Override
+//    public AuditEntry map(int index, ResultSet r, StatementContext ctx) throws SQLException
+//    {
+//      return JacksonUtils.readValue(jsonMapper, r.getBytes("payload"), AuditEntry.class);
+//    }
+//  }
+
 }
